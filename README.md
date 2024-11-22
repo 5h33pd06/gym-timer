@@ -1,5 +1,5 @@
 # gym-timer
-This is a timer and stopwatch webpage that I created for the BJJ gym I go to. 
+This is a timer and stopwatch webpage that I created for the BJJ gym I go to. This is displayed on tv screens linked across 3 different rooms by HDMI over Cat6 cables/adapters, and is running on a Raspberry Pi.
 
 This is a simple interface that shows a black background with red characters. The round timer is large digits at the top with the actual time clock at the bottom, and there are buttons between the two clocks to control the timer. The round count is shown at the bottom on both sides of the time clock.
 
