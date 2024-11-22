@@ -73,7 +73,7 @@
 		box-sizing: border-box; /* Ensures padding doesn't affect height */
     }
     
-    #breakOptions {
+    #breakOptions, .break-buttons {
         color: red;
         font-size: 20px;
     }
@@ -158,7 +158,7 @@
     <button class="stopwatch-button" onclick="resetStopwatch()">Reset</button>
 </div>
 <br>
-<div id="breakOptions">
+<div class="break-buttons">
     Break Duration:
 	<input type="radio" id="break0" name="breakDuration" value="0" onchange="updateBreakDuration(0)">
     <label for="break0">0s</label>
@@ -200,15 +200,18 @@
 	function switchMode(selectedMode) {
         var timerButtons = document.querySelector('.timer-buttons');
         var stopwatchButtons = document.querySelector('.stopwatch-buttons');
+		var breakButtons = document.querySelector('.break-buttons');
         var timerDisplay = document.getElementById('timer');
 
         if (selectedMode === 'timer') {
             timerButtons.classList.remove('hidden');
             stopwatchButtons.classList.add('hidden');
+			breakButtons.classList.remove('hidden');
             timerDisplay.textContent = "00:00";
         } else if (selectedMode === 'stopwatch') {
             stopwatchButtons.classList.remove('hidden');
             timerButtons.classList.add('hidden');
+			breakButtons.classList.add('hidden');
             timerDisplay.textContent = "00:00";
         }
     }
