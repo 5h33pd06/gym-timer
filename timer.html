@@ -491,6 +491,9 @@
 			} else if (mode === "stopwatch") {
 				startStopwatch(); // Start the stopwatch
 				stopwatchRunning = true;
+			} else if (mode === "timer") {
+				timerRunning = true;
+				stopTimer(); // Stop the timer
 			}
 			event.preventDefault(); // Prevent the default action of the spacebar
         } else if (event.key === "Escape") {
