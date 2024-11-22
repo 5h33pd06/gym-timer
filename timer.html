@@ -179,6 +179,7 @@
 <script>
     var timerInterval; // Variable to hold the interval ID for the timer
 	var countdownInterval; // Variable to hold the interval ID for countdown
+	var countdown = 10; // Default countdown for all timers
     var breakDuration = 60; // Default break duration in seconds
     var roundsCount = 0; // Counter for rounds
 	var timerRunning = false; // Flag to track if the timer is currently running
@@ -284,7 +285,6 @@
         clearInterval(timerInterval);
 
         // Countdown for 10 seconds before starting the timer
-        var countdown = 10;
         timerDisplay.textContent = countdown;
         countdownRunning = true; // Mark countdown as running
         countdownInterval = setInterval(function() {
@@ -380,10 +380,9 @@
     randomTimerRunning = true;
 
     var timerDisplay = document.getElementById('timer');
-    var countdown = 10; // 10-second countdown before starting the random timer
     var randomTimeLeft = getRandomTime(); // Get a random duration for the timer
 
-    // Countdown for 10 seconds before starting the random timer
+    // Countdown before starting the random timer
     timerDisplay.textContent = countdown;
     countdownRunning = true;
 
