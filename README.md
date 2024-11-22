@@ -8,3 +8,7 @@ This has both a countdown timer and a stopwatch feature that are controlled by t
 In stopwatch mode, the stopwatch can be started and stopped by a mouseclick or by pressing the spacebar key, and can be reset by mouseclick or by pressing the "Esc" key on the keyboard.
 
 When the timer is started for the first time, a 10 second countdown starts, and a beep will sound for the last 5 seconds with a buzzer sounding to start the round. At the end of the round, a beep will sound for the last 5 seconds with a buzzer sounding to stop the round. During the break period, a beep will sound for the last 5 seconds with a buzzer sounding to end the break/start the next round.
+
+![image](https://github.com/user-attachments/assets/851dcf70-b325-44fc-93e2-78432d7cc969)
+
+![image](https://github.com/user-attachments/assets/b2c17d36-6bb1-462b-8eda-a71899ac9805)
