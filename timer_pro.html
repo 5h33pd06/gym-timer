@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro Gym Timer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
+
+<style>
+    /* --- Local Font Loading --- */
+    @font-face {
+        font-family: 'Orbitron';
+        src: url('fonts/Orbitron-Medium.ttf') format('truetype');
+        font-weight: 500;
+        font-style: normal;
+    }
+    @font-face {
+        font-family: 'Orbitron';
+        src: url('fonts/Orbitron-Bold.ttf') format('truetype');
+        font-weight: 700;
+        font-style: normal;
+    }
+    @font-face {
+        font-family: 'Orbitron';
+        src: url('fonts/Orbitron-Black.ttf') format('truetype');
+        font-weight: 900;
+        font-style: normal;
+    }
+
+    :root {
+        --color-ready: #ffffff;
+        --color-go: #00ff00;      
+        --color-break: #00ccff;   
+        --color-warn: #ff0000;    
+        --bg-color: #000000;
+        --color-text: #ffffff;
+    }
+
+    /* --- RED THEME OVERRIDES --- */
+    body.theme-red {
+        --color-ready: #ff0000;
+        --color-go: #ff0000;
+        --color-break: #ff0000;
+        --color-warn: #ff0000;
+        --color-text: #ff0000;
+    }
+
+    body {
+        background-color: var(--bg-color);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        font-family: 'Orbitron', sans-serif; 
+        color: var(--color-ready);
+        overflow: hidden; 
+        transition: color 0.3s ease;
+    }
+
+    /* --- Progress Bar --- */
+    #progress-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 10px;
+        background-color: #333;
+        z-index: 1000;
+    }
+
+    #progress-fill {
+        height: 100%;
+        width: 100%;
+        background-color: currentColor; 
+        transition: width 1s linear; 
+    }
+
+    /* --- Status Classes --- */
+    body.status-ready { color: var(--color-ready); }
+    body.status-go { color: var(--color-go); }
+    body.status-break { color: var(--color-break); }
+    body.status-warn { color: var(--color-warn); }
+    body.status-paused { color: #ffff00; }
+    
+    /* Red Theme Paused Override */
+    body.theme-red.status-paused { color: #ff0000; opacity: 0.5; animation: blink 1s infinite; }
+    @keyframes blink { 50% { opacity: 1; } }
+
+    /* Typography */
+    #timer {
+        font-size: 20vw;
+        font-weight: 900;
+        line-height: 1;
+        text-align: center;
+        font-variant-numeric: tabular-nums; 
+        text-shadow: 0 0 10px currentColor; 
+        margin-top: 20px;
+        transition: font-size 0.3s ease; 
+        display: flex;
+        justify-content: center;
+    }
+    
+    #timer.break-text { font-size: 14vw; }
+    #timer.interval-text { font-size: 10vw; }
+    #timer.stopwatch-text { font-size: 13vw; }
+    
+    .sw-unit { display: inline-block; width: 1.6em; text-align: right; }
+    .sw-sep { display: inline-block; width: 0.4em; text-align: center; opacity: 0.7; }
+
+    #clock {
+        font-size: 8vw; 
+        opacity: 0.7;
+        transition: opacity 0.3s;
+    }
+
+    #clock-and-rounds {
+        display: flex;
+        justify-content: space-between; 
+        width: 90vw;
+        max-width: 900px;
+        align-items: baseline;
+        transition: all 0.3s ease;
+    }
+    
+    #clock-and-rounds.wide-mode {
+        width: 98vw !important;
+        max-width: none !important;
+    }
+
+    .round-indicator {
+        font-size: 6vw; 
+        width: 35%;     
+        white-space: nowrap; 
+    }
+    
+    #rounds-left { text-align: left; }
+    #rounds-right { text-align: right; }
+
+    /* --- Mobile Tweak --- */
+    @media (max-width: 600px) {
+        #clock { font-size: 12vw; }
+        .round-indicator { font-size: 8vw; }
+    }
+
+    /* --- Focus Mode --- */
+    body.running .control-section {
+        opacity: 0.3; 
+        pointer-events: none; 
+        transition: opacity 1s ease;
+    }
+    body.running:hover .control-section {
+        opacity: 1; 
+        pointer-events: auto;
+    }
+
+    /* --- Controls & UI --- */
+    .controls-top {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        gap: 15px;
+        z-index: 100;
+    }
+
+    .icon-btn {
+        background: none;
+        border: 2px solid #333;
+        color: #666;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        font-size: 18px;
+    }
+
+    .icon-btn:hover {
+        border-color: #fff;
+        color: #fff;
+    }
+    
+    /* Red Theme Icon Overrides */
+    body.theme-red .icon-btn:hover { border-color: #ff0000; color: #ff0000; }
+    
+    .icon-btn.voice-active {
+        border-color: #00ff00;
+        color: #00ff00;
+        box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+    }
+    
+    body.theme-red .icon-btn.voice-active {
+        border-color: #ff0000;
+        color: #ff0000;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+    }
+    
+    .icon-btn.mute-active {
+        border-color: #ff0000;
+        color: #ff0000;
+    }
+
+    /* Theme Toggle Button Specific */
+    #themeBtn.red-active {
+        border-color: #ff0000;
+        color: #ff0000;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+    }
+
+    .timer-buttons, .stopwatch-buttons, .tabata-buttons, .break-buttons, .settings-row, .tabata-settings {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 15px;
+        gap: 10px;
+    }
+    
+    button {
+        background-color: #333;
+        color: white;
+        cursor: pointer;
+        border-radius: 4px;
+        border: 1px solid #444;
+        padding: 10px 20px;
+        font-size: 1.2rem;
+        font-family: 'Orbitron', sans-serif;
+        transition: all 0.2s;
+    }
+
+    button:hover { background-color: #555; }
+    button:active { transform: translateY(2px); }
+    
+    /* Red Theme Generic Buttons */
+    body.theme-red button {
+        color: #aaa;
+        border-color: #550000;
+    }
+    body.theme-red button:hover {
+        border-color: #ff0000;
+        color: #fff;
+    }
+
+    button.active-btn {
+        background-color: #fff;
+        color: #000;
+        border-color: #fff;
+        font-weight: 700;
+        box-shadow: 0 0 15px rgba(255,255,255,0.5);
+    }
+    
+    /* Red Theme Active Buttons */
+    body.theme-red button.active-btn {
+        background-color: #ff0000;
+        color: #000;
+        border-color: #ff0000;
+        box-shadow: 0 0 15px rgba(255,0,0,0.5);
+    }
+
+    /* --- Specific Button Colors --- */
+    #sw-btn-start { background-color: #003300; border-color: #005500; }
+    #sw-btn-start:hover { background-color: #005500; border-color: #007700; }
+
+    .btn-stop { background-color: #330000; border-color: #550000; }
+    .btn-stop:hover { background-color: #660000; border-color: #880000; }
+
+    .btn-resume {
+        background-color: #003300;
+        border-color: #005500;
+        color: #00ff00;
+        font-weight: bold;
+        box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+    }
+    .btn-resume:hover { background-color: #005500; border-color: #007700; color: #ffffff; }
+    
+    #tabata-btn-start { background-color: #554400; border-color: #886600; color: #ffcc00; }
+    #tabata-btn-start:hover { background-color: #776600; color: #fff; }
+    
+    /* --- Red Theme Specific Button Overrides --- */
+    body.theme-red #sw-btn-start,
+    body.theme-red #tabata-btn-start,
+    body.theme-red .btn-resume {
+        background-color: #330000;
+        border-color: #aa0000;
+        color: #ff0000;
+    }
+    
+    body.theme-red #sw-btn-start:hover,
+    body.theme-red #tabata-btn-start:hover,
+    body.theme-red .btn-resume:hover {
+        background-color: #550000;
+        border-color: #ff0000;
+        color: #ffffff;
+    }
+
+    /* --- Disabled State Logic --- */
+    button:disabled {
+        opacity: 0.2; 
+        cursor: not-allowed;
+        pointer-events: none; 
+        filter: grayscale(100%);
+    }
+
+    button.active-btn:disabled {
+        opacity: 1; 
+        cursor: default;
+        box-shadow: 0 0 5px rgba(255,255,255,0.2); 
+    }
+
+    /* Settings Inputs */
+    .small-input {
+        background-color: #222;
+        color: white;
+        border: 1px solid #444;
+        border-radius: 4px;
+        height: 35px;
+        width: 50px;
+        text-align: center;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1rem;
+    }
+    .small-input:disabled { opacity: 0.2; cursor: not-allowed; }
+    .settings-label { color: #888; font-size: 0.9rem; margin-right: 5px; }
+
+    #customRoundLength {
+        background-color: #222;
+        color: white;
+        border: 1px solid #444;
+        border-radius: 4px;
+        height: 44px; 
+        font-size: 1.2rem;
+        text-align: center;
+        width: 100px;
+        font-family: 'Orbitron', sans-serif;
+    }
+    #customRoundLength:disabled { opacity: 0.2; cursor: not-allowed; }
+    #customRoundLength:focus, .small-input:focus { outline: 2px solid var(--color-go); }
+    
+    /* Red Theme Inputs */
+    body.theme-red .small-input, 
+    body.theme-red #customRoundLength {
+        border-color: #550000;
+        color: #ff0000;
+    }
+    
+    body.theme-red #customRoundLength:focus, 
+    body.theme-red .small-input:focus { 
+        outline: 2px solid #ff0000; 
+    }
+
+    /* Radio Labels */
+    input[type="radio"]:disabled + label {
+        opacity: 0.2;
+        cursor: not-allowed;
+        pointer-events: none; 
+        filter: grayscale(100%);
+        border-color: #333; 
+    }
+    
+    input[type="radio"]:checked:disabled + label {
+        opacity: 0.5;
+        background-color: #444; 
+        color: #aaa;
+        border-color: #444;
+    }
+
+    input[type="radio"] { display: none; }
+    
+    input[type="radio"] + label {
+        display: inline-block;
+        padding: 8px 15px;
+        cursor: pointer;
+        font-size: 1rem;
+        color: #666;
+        border: 1px solid #333;
+        border-radius: 4px;
+        margin: 0 5px;
+        transition: all 0.2s;
+    }
+
+    input[type="radio"]:not(:disabled) + label:hover {
+        border-color: #fff;
+        color: #fff;
+        background-color: #111;
+    }
+
+    input[type="radio"]:checked + label {
+        background-color: #333;
+        color: #fff;
+        border-color: #fff;
+    }
+    
+    /* Red Theme Radio */
+    body.theme-red input[type="radio"]:checked + label {
+        background-color: #550000;
+        border-color: #ff0000;
+        color: #ff0000;
+    }
+    body.theme-red input[type="radio"]:not(:disabled) + label:hover {
+        border-color: #ff0000;
+        color: #ff0000;
+    }
+
+    .hidden { display: none !important; }
+    
+    .break-buttons {
+        color: #888;
+        margin-top: 15px;
+        font-size: 0.9rem;
+    }
+</style>
+</head>
+<body class="status-ready">
+
+<div id="progress-container">
+    <div id="progress-fill" style="width: 100%;"></div>
+</div>
+
+<audio id="beep" src="beep.mp3" preload="auto"></audio>
+<audio id="buzzer" src="buzzer.mp3" preload="auto"></audio>
+
+<div class="controls-top">
+    <button class="icon-btn" id="voiceBtn" onclick="toggleVoice()" title="Voice Coach">
+        🗣️
+    </button>
+    <button class="icon-btn" id="muteBtn" onclick="toggleMute()" title="Toggle Sound">
+        🔊
+    </button>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle Visual Theme">
+        🎨
+    </button>
+    <button class="icon-btn" onclick="toggleFullscreen()" title="Fullscreen">
+        ⛶
+    </button>
+</div>
+
+<div id="clock-and-rounds">
+    <div id="rounds-left" class="round-indicator">R0 -</div>
+    <div id="clock">00:00:00</div>
+    <div id="rounds-right" class="round-indicator">- R0</div>
+</div>
+
+<div id="timer">00:00</div>
+
+<div class="control-section">
+    <div style="margin-bottom: 5px; margin-top: 10px; text-align: center;">
+        <input type="radio" id="timer_radio" name="mode" value="timer" onchange="switchMode('timer')" checked> 
+        <label for="timer_radio">TIMER</label>
+        
+        <input type="radio" id="tabata_radio" name="mode" value="tabata" onchange="switchMode('tabata')"> 
+        <label for="tabata_radio">TABATA</label>
+        
+        <input type="radio" id="stopwatch_radio" name="mode" value="stopwatch" onchange="switchMode('stopwatch')">
+        <label for="stopwatch_radio">STOPWATCH</label>
+    </div>
+
+    <div class="settings-row" id="settings-row">
+        <div id="rounds-setting">
+            <span class="settings-label">ROUNDS:</span>
+            <input type="number" id="maxRounds" class="small-input" placeholder="∞" min="1" max="99">
+        </div>
+        <div id="prep-setting">
+            <span class="settings-label">PREP:</span>
+            <input type="number" id="prepTime" class="small-input" value="10" min="0" max="60">
+            <span class="settings-label">s</span>
+        </div>
+    </div>
+    
+    <div class="tabata-settings hidden" id="tabata-settings">
+        <div>
+            <span class="settings-label">WORK:</span>
+            <input type="number" id="tabWork" class="small-input" value="20" min="5" max="999">
+            <span class="settings-label">s</span>
+        </div>
+        <div>
+            <span class="settings-label">REST:</span>
+            <input type="number" id="tabRest" class="small-input" value="10" min="0" max="999">
+            <span class="settings-label">s</span>
+        </div>
+        <div>
+            <span class="settings-label">INT/RND:</span>
+            <input type="number" id="tabIntervals" class="small-input" value="5" min="1" max="99">
+        </div>
+        <div>
+            <span class="settings-label">ROUNDS:</span>
+            <input type="number" id="tabRounds" class="small-input" value="5" min="1" max="99">
+        </div>
+    </div>
+
+    <div class="timer-buttons">
+        <input 
+            type="text" 
+            inputmode="numeric"
+            id="customRoundLength" 
+            placeholder="MM:SS" 
+            pattern="\d*" 
+            title="Enter time in MM:SS format">
+        
+        <button id="btn-1m" class="time-select-btn" onclick="handleTimerClick(1, 'btn-1m')">1m</button>
+        <button id="btn-3m" class="time-select-btn" onclick="handleTimerClick(3, 'btn-3m')">3m</button>
+        <button id="btn-4m" class="time-select-btn" onclick="handleTimerClick(4, 'btn-4m')">4m</button>
+        <button id="btn-5m" class="time-select-btn" onclick="handleTimerClick(5, 'btn-5m')">5m</button>
+        <button id="btn-7m" class="time-select-btn" onclick="handleTimerClick(7, 'btn-7m')">7m</button>
+        <button id="btn-10m" class="time-select-btn" onclick="handleTimerClick(10, 'btn-10m')">10m</button>
+        
+        <button id="btn-rnd" class="time-select-btn" onclick="handleRandomClick('btn-rnd')">RND</button>
+        
+        <button id="timer-btn-stop" class="btn-stop" onclick="handleTimerStop()">STOP</button>
+        <button onclick="resetTimer()">RESET</button>
+    </div>
+    
+    <div class="tabata-buttons hidden">
+        <button id="tabata-btn-start" onclick="startTabata()">START TABATA</button>
+        <button id="tabata-btn-stop" class="btn-stop" onclick="handleTabataStop()">STOP</button>
+        <button onclick="resetTimer()">RESET</button>
+    </div>
+
+    <div class="stopwatch-buttons hidden">
+        <button id="sw-btn-start" onclick="startStopwatch()">START</button>
+        <button class="btn-stop" onclick="stopStopwatch()">STOP</button>
+        <button onclick="resetStopwatch()">RESET</button>
+    </div>
+
+    <div class="break-buttons">
+        BREAK DURATION:
+        <input type="radio" id="break0" name="breakDuration" value="0" onchange="updateBreakDuration(0)">
+        <label for="break0">0s</label>
+        <input type="radio" id="break10" name="breakDuration" value="10" onchange="updateBreakDuration(10)">
+        <label for="break10">10s</label>
+        <input type="radio" id="break45" name="breakDuration" value="45" onchange="updateBreakDuration(45)">
+        <label for="break45">45s</label>
+        <input type="radio" id="break60" name="breakDuration" value="60" onchange="updateBreakDuration(60)" checked>
+        <label for="break60">60s</label>
+    </div>
+</div>
+
+<script>
+    // --- Configuration & State ---
+    let timerInterval; 
+    let countdownInterval; 
+    let stopwatchInterval;
+    let wakeLock = null; 
+    
+    let breakDuration = 60; 
+    let mode = "timer"; 
+    
+    let timerRunning = false;
+    let stopwatchRunning = false;
+    let isPaused = false;
+    let isTabataMode = false;
+    let isRedTheme = false;
+    
+    // Audio State
+    let isMuted = false;
+    let isVoiceOn = false; 
+    let previousAudioState = { muted: false, voice: false };
+    
+    // Voice Loading State (Crucial for Linux/Pi)
+    let voicesLoaded = false;
+    
+    // Last spoken second (to prevent voice stutter)
+    let lastSpoken = -1; 
+    let elapsedTime = 0; 
+    
+    // --- State Objects ---
+    let timerState = {
+        phase: 'idle', roundsCount: 0, maxRounds: Infinity, remainingMs: 0,
+        totalPhaseTime: 0, endTime: 0, durationFn: null, isRandom: false
+    };
+
+    let tabataState = {
+        set: 1, interval: 1, phase: 'init', workTime: 20, restTime: 10,
+        intervalsPerRound: 5, maxSets: 5, remainingMs: 0, totalPhaseTime: 0, endTime: 0
+    };
+
+    // --- Theme Logic ---
+    function toggleTheme() {
+        isRedTheme = !isRedTheme;
+        document.body.classList.toggle('theme-red');
+        const btn = document.getElementById('themeBtn');
+        if(isRedTheme) btn.classList.add('red-active');
+        else btn.classList.remove('red-active');
+    }
+
+    // --- Audio, Voice & Wake Lock ---
+    
+    // Pre-load voices for Linux/Pi compatibility
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+            voicesLoaded = true;
+        };
+    }
+
+    function playAudio(audioElement) {
+        if (!isMuted && audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(e => console.log("Audio play blocked", e));
+        }
+    }
+
+    function speak(text) {
+        if (!isVoiceOn) return;
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1; 
+            utterance.pitch = 1;
+            
+            // Attempt to force an English voice if available (helps on Linux)
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                const engVoice = voices.find(v => v.lang.startsWith('en'));
+                if (engVoice) utterance.voice = engVoice;
+            }
+            
+            window.speechSynthesis.speak(utterance);
+        }
+    }
+
+    function toggleMute() {
+        setMute(!isMuted);
+    }
+    
+    function setMute(muted) {
+        isMuted = muted;
+        const btn = document.getElementById('muteBtn');
+        if (isMuted) {
+            btn.textContent = "🔇";
+            btn.classList.add('mute-active'); 
+        } else {
+            btn.textContent = "🔊";
+            btn.classList.remove('mute-active');
+        }
+    }
+
+    function toggleVoice() {
+        setVoice(!isVoiceOn);
+    }
+    
+    function setVoice(active) {
+        isVoiceOn = active;
+        const btn = document.getElementById('voiceBtn');
+        if (isVoiceOn) {
+            btn.classList.add('voice-active');
+            // Silent init to wake up the engine
+            if(!isTabataMode) speak("Voice On"); 
+        } else {
+            btn.classList.remove('voice-active');
+            window.speechSynthesis.cancel();
+        }
+    }
+
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }
+
+    function releaseWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release().then(() => {
+                wakeLock = null;
+            });
+        }
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(e => console.log(e));
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    // --- Visual Status Helpers ---
+    function setStatus(status) {
+        if (status === 'ready') document.body.classList.remove('running');
+        else document.body.classList.add('running');
+
+        document.body.classList.remove('status-ready', 'status-go', 'status-break', 'status-warn', 'status-paused');
+        document.body.classList.add('status-' + status);
+    }
+
+    function updateProgressBar(percent) {
+        document.getElementById('progress-fill').style.width = percent + '%';
+    }
+
+    function highlightButton(btnId) {
+        document.querySelectorAll('.timer-buttons button').forEach(b => b.classList.remove('active-btn'));
+        if (btnId) {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.classList.add('active-btn');
+        }
+    }
+
+    // --- Button Locking Helpers ---
+    function toggleTimeButtons(disable) {
+        const btns = document.querySelectorAll('.time-select-btn');
+        btns.forEach(btn => btn.disabled = disable);
+        document.getElementById('customRoundLength').disabled = disable;
+
+        const breakRadios = document.querySelectorAll('input[name="breakDuration"]');
+        breakRadios.forEach(radio => radio.disabled = disable);
+        
+        document.getElementById('maxRounds').disabled = disable;
+        document.getElementById('prepTime').disabled = disable;
+        document.getElementById('tabata-btn-start').disabled = disable;
+        
+        // Tabata inputs
+        document.getElementById('tabWork').disabled = disable;
+        document.getElementById('tabRest').disabled = disable;
+        document.getElementById('tabIntervals').disabled = disable;
+        document.getElementById('tabRounds').disabled = disable;
+    }
+
+    function toggleModeLock(disable) {
+        document.getElementById('timer_radio').disabled = disable;
+        document.getElementById('tabata_radio').disabled = disable;
+        document.getElementById('stopwatch_radio').disabled = disable;
+    }
+
+    // --- Clock Display ---
+    function updateClock() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
+        document.getElementById('clock').textContent = timeString;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- Mode Switching ---
+    function switchMode(selectedMode) {
+        mode = selectedMode;
+        
+        const timerButtons = document.querySelector('.timer-buttons');
+        const stopwatchButtons = document.querySelector('.stopwatch-buttons');
+        const tabataButtons = document.querySelector('.tabata-buttons');
+        const breakButtons = document.querySelector('.break-buttons');
+        
+        const settingsRow = document.getElementById('settings-row');
+        const tabataSettings = document.getElementById('tabata-settings');
+        const clockDiv = document.getElementById('clock');
+        const roundsLeft = document.getElementById('rounds-left');
+        const roundsRight = document.getElementById('rounds-right');
+        const clockContainer = document.getElementById('clock-and-rounds');
+        
+        const timerDisplay = document.getElementById('timer');
+
+        stopTimer(); // Calls the hard reset
+        stopStopwatch();
+        resetDisplay();
+
+        // Default state: Hide all specific controls
+        timerButtons.classList.add('hidden');
+        stopwatchButtons.classList.add('hidden');
+        tabataButtons.classList.add('hidden');
+        breakButtons.classList.add('hidden');
+        settingsRow.classList.add('hidden');
+        tabataSettings.classList.add('hidden');
+        
+        // Reset Clock & Rounds Visibility & Alignment (Default Timer behavior)
+        clockDiv.classList.remove('hidden');
+        roundsLeft.classList.remove('hidden');
+        roundsRight.classList.remove('hidden');
+        clockContainer.style.justifyContent = 'space-between';
+        
+        // Remove Wide Mode class by default
+        clockContainer.classList.remove('wide-mode');
+        
+        // Remove Stopwatch text scaling
+        timerDisplay.classList.remove('stopwatch-text');
+
+        if (mode === 'timer') {
+            timerButtons.classList.remove('hidden');
+            breakButtons.classList.remove('hidden');
+            settingsRow.classList.remove('hidden');
+            
+            // USE WIDE MODE FOR TIMER TOO
+            clockContainer.classList.add('wide-mode');
+        } 
+        else if (mode === 'tabata') {
+            tabataButtons.classList.remove('hidden');
+            tabataSettings.classList.remove('hidden');
+            
+            // HIDE CLOCK IN TABATA to prevent overlap
+            clockDiv.classList.add('hidden');
+            
+            // USE WIDE MODE
+            clockContainer.classList.add('wide-mode');
+        } 
+        else if (mode === 'stopwatch') {
+            stopwatchButtons.classList.remove('hidden');
+            
+            // HIDE ROUNDS IN STOPWATCH
+            roundsLeft.classList.add('hidden');
+            roundsRight.classList.add('hidden');
+            
+            // CENTER THE CLOCK
+            clockContainer.style.justifyContent = 'center';
+            
+            // ENABLE STOPWATCH TEXT SCALING & SET INITIAL VALUE
+            timerDisplay.classList.add('stopwatch-text');
+            // Initial render with span structure for stability
+            renderStopwatchDisplay(0,0,0);
+        }
+    }
+
+    // ==========================================
+    // --- STANDARD TIMER LOGIC (State Based) ---
+    // ==========================================
+
+    function startTimerLogic(getDurationFn, isRandom = false) {
+        if (timerRunning) return;
+        timerRunning = true;
+        isPaused = false;
+        
+        toggleTimeButtons(true);
+        toggleModeLock(true);
+        requestWakeLock();
+
+        // Initialize State
+        timerState.phase = 'prep';
+        timerState.roundsCount = 0;
+        timerState.durationFn = getDurationFn;
+        timerState.isRandom = isRandom;
+        
+        const maxRoundsInput = document.getElementById('maxRounds').value;
+        timerState.maxRounds = maxRoundsInput ? parseInt(maxRoundsInput) : Infinity;
+
+        // Start Prep
+        const timerDisplay = document.getElementById('timer');
+        let countdown = parseInt(document.getElementById('prepTime').value) || 10;
+        
+        timerDisplay.textContent = countdown;
+        setStatus('ready');
+        timerDisplay.classList.remove('break-text');
+        updateProgressBar(100); 
+        
+        const countdownEndTime = Date.now() + (countdown * 1000);
+
+        if(countdown <= 0) {
+            timerState.phase = 'work';
+            runTimerStep();
+            return;
+        }
+
+        countdownInterval = setInterval(() => {
+            const now = Date.now();
+            const remaining = Math.ceil((countdownEndTime - now) / 1000);
+            
+            if (remaining !== countdown) {
+                countdown = remaining;
+                timerDisplay.textContent = countdown > 0 ? countdown : 0;
+                if (countdown <= 3 && countdown > 0) playAudio(document.getElementById('beep'));
+            }
+
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                playAudio(document.getElementById('buzzer'));
+                
+                // Transition to Work
+                timerState.phase = 'work';
+                timerState.roundsCount = 1;
+                runTimerStep();
+            }
+        }, 50);
+    }
+
+    function runTimerStep(isResume = false) {
+        const timerDisplay = document.getElementById('timer');
+        
+        let duration = 0;
+
+        if (!isResume) {
+            if (timerState.phase === 'work') {
+                updateRoundsDisplay(timerState.roundsCount);
+                setStatus('go');
+                speak("Round " + timerState.roundsCount);
+                duration = timerState.durationFn(); 
+            } 
+            else if (timerState.phase === 'break') {
+                setStatus('break');
+                speak("Rest");
+                duration = breakDuration;
+            }
+            
+            timerState.totalPhaseTime = duration;
+            timerState.remainingMs = duration * 1000;
+        } else {
+            if (timerState.phase === 'work') setStatus('go');
+            else setStatus('break');
+        }
+
+        timerState.endTime = Date.now() + timerState.remainingMs;
+
+        timerInterval = setInterval(() => {
+            const now = Date.now();
+            const exactTimeLeft = (timerState.endTime - now) / 1000;
+            const timeLeftCeil = Math.ceil(exactTimeLeft);
+
+            const minutes = Math.floor(timeLeftCeil / 60);
+            const seconds = timeLeftCeil % 60;
+            
+            let percent = (exactTimeLeft / timerState.totalPhaseTime) * 100;
+            if (percent < 0) percent = 0;
+            updateProgressBar(percent);
+
+            if (timerState.phase === 'break') {
+                timerDisplay.textContent = 'BREAK ' + seconds;
+                timerDisplay.classList.add('break-text');
+                if (timeLeftCeil <= 5) setStatus('warn');
+                else setStatus('break');
+            } else {
+                timerDisplay.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+                timerDisplay.classList.remove('break-text');
+                if (timeLeftCeil <= 10) setStatus('warn');
+                else setStatus('go');
+            }
+            
+            if (timeLeftCeil > 0 && timeLeftCeil !== lastSpoken) {
+                 const ms = (timerState.endTime - now) % 1000;
+                 if(ms > 800) { 
+                     lastSpoken = timeLeftCeil; 
+                     if (timeLeftCeil <= 5) playAudio(document.getElementById('beep'));
+                     if (timeLeftCeil === 10 && timerState.phase === 'work') {
+                         speak("Ten Seconds Remaining");
+                     }
+                 }
+            }
+
+            if (timeLeftCeil <= 0) {
+                clearInterval(timerInterval);
+                playAudio(document.getElementById('buzzer'));
+                lastSpoken = -1;
+                transitionTimerPhase();
+            }
+        }, 30); 
+    }
+
+    function transitionTimerPhase() {
+        if (timerState.phase === 'work') {
+            if (timerState.roundsCount >= timerState.maxRounds) {
+                stopTimer();
+                document.getElementById('timer').textContent = "DONE";
+                speak("Workout Complete");
+                return;
+            }
+            if (breakDuration > 0) {
+                timerState.phase = 'break';
+            } else {
+                timerState.roundsCount++;
+                timerState.phase = 'work';
+            }
+        } 
+        else if (timerState.phase === 'break') {
+            timerState.roundsCount++;
+            timerState.phase = 'work';
+        }
+
+        runTimerStep(false);
+    }
+    
+    function handleTimerStop() {
+        if (timerState.phase === 'prep') {
+            stopTimer();
+            return;
+        }
+
+        const btn = document.getElementById('timer-btn-stop');
+        
+        if (!isPaused) {
+            clearInterval(timerInterval);
+            const now = Date.now();
+            timerState.remainingMs = timerState.endTime - now;
+            isPaused = true;
+            setStatus('paused'); 
+            btn.textContent = "RESUME";
+            btn.classList.remove('btn-stop');
+            btn.classList.add('btn-resume');
+        } else {
+            isPaused = false;
+            btn.textContent = "STOP";
+            btn.classList.remove('btn-resume');
+            btn.classList.add('btn-stop');
+            runTimerStep(true);
+        }
+    }
+
+
+    // ==========================================
+    // --- TABATA LOGIC (State Based) ---
+    // ==========================================
+    
+    function startTabata() {
+        if (timerRunning) return;
+        
+        timerRunning = true;
+        isTabataMode = true;
+        isPaused = false;
+        
+        previousAudioState.muted = isMuted;
+        previousAudioState.voice = isVoiceOn;
+        setMute(true);   // Beeps OFF
+        setVoice(true);  // Voice ON
+        
+        toggleTimeButtons(true);
+        toggleModeLock(true);
+        requestWakeLock();
+
+        // --- READ CONFIGURATION ---
+        tabataState.workTime = parseInt(document.getElementById('tabWork').value) || 20;
+        tabataState.restTime = parseInt(document.getElementById('tabRest').value) || 10;
+        tabataState.intervalsPerRound = parseInt(document.getElementById('tabIntervals').value) || 5;
+        tabataState.maxSets = parseInt(document.getElementById('tabRounds').value) || 5;
+
+        // Initialize State
+        tabataState.set = 1;
+        tabataState.interval = 1;
+        tabataState.phase = 'prep';
+        tabataState.remainingMs = 0;
+        
+        const timerDisplay = document.getElementById('timer');
+        let countdown = 10; 
+        
+        timerDisplay.textContent = countdown;
+        setStatus('ready');
+        timerDisplay.classList.remove('break-text');
+        updateProgressBar(100); 
+        
+        const countdownEndTime = Date.now() + (countdown * 1000);
+        let lastPrepSpoken = -1;
+
+        countdownInterval = setInterval(() => {
+            const now = Date.now();
+            const remaining = Math.ceil((countdownEndTime - now) / 1000);
+            
+            if (remaining !== countdown) {
+                countdown = remaining;
+                timerDisplay.textContent = countdown > 0 ? countdown : 0;
+            }
+            
+            if (remaining <= 5 && remaining > 0 && remaining !== lastPrepSpoken) {
+                speak(remaining);
+                lastPrepSpoken = remaining;
+            }
+            
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                tabataState.phase = 'work';
+                runTabataStep();
+            }
+        }, 50);
+    }
+    
+    function runTabataStep(isResume = false) {
+        let duration = 0;
+        let speech = "";
+        
+        const updateTabataDisplay = () => {
+            document.getElementById('rounds-left').textContent = `SET ${tabataState.set}/${tabataState.maxSets}`;
+            if(tabataState.phase === 'set_rest') {
+                 document.getElementById('rounds-right').textContent = `REST`;
+            } else {
+                 document.getElementById('rounds-right').textContent = `INT ${tabataState.interval}/${tabataState.intervalsPerRound}`;
+            }
+        };
+        updateTabataDisplay();
+
+        if (!isResume) {
+            if (tabataState.phase === 'work') {
+                duration = tabataState.workTime;
+                setStatus('go');
+                if(tabataState.interval === 1) speech = "Set " + tabataState.set + ". Go.";
+                else speech = "Go";
+            } 
+            else if (tabataState.phase === 'rest') {
+                duration = tabataState.restTime;
+                setStatus('break');
+                speech = "Rest";
+            } 
+            else if (tabataState.phase === 'set_rest') {
+                duration = 60; // Hardcoded set rest, typically 1 min
+                setStatus('break');
+                speech = "Rest for one minute";
+            }
+            
+            if(speech) speak(speech);
+            tabataState.totalPhaseTime = duration;
+            tabataState.remainingMs = duration * 1000;
+        } else {
+             if (tabataState.phase === 'work') setStatus('go');
+             else setStatus('break');
+        }
+        
+        runTabataTimer();
+    }
+
+    function runTabataTimer() {
+        tabataState.endTime = Date.now() + tabataState.remainingMs;
+        const timerDisplay = document.getElementById('timer');
+        
+        timerInterval = setInterval(() => {
+            const now = Date.now();
+            const exactTimeLeft = (tabataState.endTime - now) / 1000;
+            const timeLeftCeil = Math.ceil(exactTimeLeft);
+            
+            if (tabataState.phase === 'set_rest' || tabataState.phase === 'rest') {
+                timerDisplay.textContent = (tabataState.phase === 'set_rest' ? 'REST ' : 'REST ') + timeLeftCeil;
+                timerDisplay.classList.add('break-text');
+                timerDisplay.classList.remove('interval-text');
+            } else {
+                timerDisplay.textContent = timeLeftCeil;
+                timerDisplay.classList.remove('break-text');
+            }
+
+            let percent = (exactTimeLeft / tabataState.totalPhaseTime) * 100;
+            if (percent < 0) percent = 0;
+            updateProgressBar(percent);
+
+            if (timeLeftCeil > 0 && timeLeftCeil !== lastSpoken) {
+                if (timeLeftCeil <= 5) {
+                    speak(timeLeftCeil);
+                    lastSpoken = timeLeftCeil;
+                }
+            }
+
+            if (timeLeftCeil <= 0) {
+                clearInterval(timerInterval);
+                lastSpoken = -1;
+                transitionTabataPhase();
+            }
+        }, 30);
+    }
+
+    function transitionTabataPhase() {
+        if (tabataState.phase === 'work') {
+            if (tabataState.interval < tabataState.intervalsPerRound) {
+                tabataState.phase = 'rest';
+            } else {
+                if (tabataState.set < tabataState.maxSets) {
+                    tabataState.phase = 'set_rest';
+                } else {
+                    stopTimer();
+                    document.getElementById('timer').textContent = "DONE";
+                    speak("Workout Complete");
+                    return;
+                }
+            }
+        } else if (tabataState.phase === 'rest') {
+            tabataState.interval++;
+            tabataState.phase = 'work';
+        } else if (tabataState.phase === 'set_rest') {
+            tabataState.set++;
+            tabataState.interval = 1;
+            tabataState.phase = 'work';
+        }
+        
+        runTabataStep(false);
+    }
+
+    function handleTabataStop() {
+        if (tabataState.phase === 'prep') {
+            stopTimer();
+            return;
+        }
+
+        const btn = document.getElementById('tabata-btn-stop');
+        
+        if (!isPaused) {
+            clearInterval(timerInterval);
+            const now = Date.now();
+            tabataState.remainingMs = tabataState.endTime - now;
+            isPaused = true;
+            setStatus('paused'); 
+            btn.textContent = "RESUME";
+            btn.classList.remove('btn-stop');
+            btn.classList.add('btn-resume');
+        } else {
+            isPaused = false;
+            btn.textContent = "STOP";
+            btn.classList.remove('btn-resume');
+            btn.classList.add('btn-stop');
+            runTabataStep(true);
+        }
+    }
+
+    // --- Wrapper Functions ---
+    function handleTimerClick(minutes, btnId) {
+        if (timerRunning) return; 
+        highlightButton(btnId);
+        startTimerLogic(() => minutes * 60);
+    }
+
+    function handleRandomClick(btnId) {
+        if (timerRunning) return;
+        highlightButton(btnId);
+        startTimerLogic(() => {
+            const times = [1, 3, 4, 5, 7, 10]; 
+            return times[Math.floor(Math.random() * times.length)] * 60;
+        }, true);
+    }
+    
+    function startTimer(duration) {
+        startTimerLogic(() => duration); 
+    }
+
+    // --- GLOBAL RESET / STOP ---
+    function stopTimer() {
+        clearInterval(countdownInterval);
+        clearInterval(timerInterval);
+        timerRunning = false;
+        isPaused = false;
+        
+        toggleTimeButtons(false);
+        toggleModeLock(false);
+        releaseWakeLock();
+        
+        if (isTabataMode) {
+            setMute(previousAudioState.muted);
+            setVoice(previousAudioState.voice);
+            isTabataMode = false;
+            
+            document.getElementById('clock').classList.remove('hidden');
+            document.getElementById('clock-and-rounds').classList.remove('wide-mode');
+        }
+        
+        const tBtn = document.getElementById('timer-btn-stop');
+        if(tBtn) { tBtn.textContent = "STOP"; tBtn.classList.remove('btn-resume'); tBtn.classList.add('btn-stop'); }
+        
+        const tabBtn = document.getElementById('tabata-btn-stop');
+        if(tabBtn) { tabBtn.textContent = "STOP"; tabBtn.classList.remove('btn-resume'); tabBtn.classList.add('btn-stop'); }
+
+        document.getElementById('timer').textContent = "STOP";
+        setStatus('ready');
+        updateProgressBar(100);
+        highlightButton(null); 
+    }
+
+    function resetTimer() {
+        stopTimer();
+        stopStopwatch();
+        resetDisplay();
+        highlightButton(null);
+        document.getElementById('prepTime').value = 10;
+        document.getElementById('maxRounds').value = ''; 
+        
+        // Reset break duration to 60s
+        breakDuration = 60;
+        const break60Radio = document.getElementById('break60');
+        if (break60Radio) break60Radio.checked = true;
+    }
+    
+    function resetDisplay() {
+        timerState.roundsCount = 0;
+        updateRoundsDisplay(0);
+        document.getElementById('timer').textContent = "00:00";
+        document.getElementById('timer').classList.remove('break-text');
+        document.getElementById('timer').classList.remove('interval-text');
+        setStatus('ready');
+        updateProgressBar(100);
+        toggleTimeButtons(false);
+        toggleModeLock(false);
+    }
+
+    function updateBreakDuration(duration) {
+        breakDuration = parseInt(duration);
+    }
+    
+    function updateRoundsDisplay(count) {
+        document.getElementById('rounds-left').textContent = `R${count} -`;
+        document.getElementById('rounds-right').textContent = `- R${count}`;
+    }
+
+    // --- Stopwatch Logic ---
+    function startStopwatch() {
+        if (stopwatchRunning) return;
+        stopwatchRunning = true;
+        
+        toggleModeLock(true);
+        requestWakeLock();
+        setStatus('go');
+        updateProgressBar(100);
+        
+        if(!document.getElementById('sw-min')) renderStopwatchDisplay(0,0,0);
+        
+        const startTime = Date.now() - elapsedTime;
+
+        stopwatchInterval = setInterval(() => {
+            elapsedTime = Date.now() - startTime;
+            const minutes = Math.floor(elapsedTime / 60000);
+            const seconds = Math.floor((elapsedTime % 60000) / 1000);
+            const hundredths = Math.floor((elapsedTime % 1000) / 10); 
+
+            updateStopwatchDigits(minutes, seconds, hundredths);
+        }, 10);
+    }
+    
+    function renderStopwatchDisplay(m, s, h) {
+        const timerDisplay = document.getElementById('timer');
+        timerDisplay.innerHTML = `
+            <span id="sw-min" class="sw-unit">${pad(m)}</span><span class="sw-sep">:</span><span id="sw-sec" class="sw-unit">${pad(s)}</span><span class="sw-sep">.</span><span id="sw-hun" class="sw-unit">${pad(h)}</span>
+        `;
+    }
+    
+    function updateStopwatchDigits(m, s, h) {
+        const elMin = document.getElementById('sw-min');
+        const elSec = document.getElementById('sw-sec');
+        const elHun = document.getElementById('sw-hun');
+        
+        if(elMin) elMin.textContent = pad(m);
+        if(elSec) elSec.textContent = pad(s);
+        if(elHun) elHun.textContent = pad(h);
+    }
+    
+    function pad(num) {
+        return num.toString().padStart(2, '0');
+    }
+
+    function stopStopwatch() {
+        if (!stopwatchRunning) return;
+        clearInterval(stopwatchInterval);
+        stopwatchRunning = false;
+        toggleModeLock(false);
+        releaseWakeLock();
+        setStatus('ready');
+    }
+
+    function resetStopwatch() {
+        stopStopwatch();
+        elapsedTime = 0;
+        renderStopwatchDisplay(0,0,0);
+    }
+
+    // --- Inputs & Keys ---
+    const customInput = document.getElementById('customRoundLength');
+    
+    customInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, ''); 
+        if (value.length > 4) value = value.slice(0, 4); 
+        if (value.length > 2) value = value.slice(0, 2) + ':' + value.slice(2);
+        e.target.value = value;
+    });
+
+    customInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            const parts = this.value.split(':');
+            if (parts.length === 2) {
+                const mins = parseInt(parts[0]) || 0;
+                const secs = parseInt(parts[1]) || 0;
+                if(mins + secs > 0) {
+                    highlightButton(null); 
+                    startTimer((mins * 60) + secs);
+                }
+                this.blur(); 
+            }
+        }
+    });
+
+    document.addEventListener('keydown', function(event) {
+        if (document.activeElement.tagName === 'INPUT') {
+            if (event.key === "Escape") document.activeElement.blur();
+            return;
+        }
+
+        const key = event.key.toLowerCase();
+
+        if (key === " " || key === "s") {
+            event.preventDefault();
+            if (mode === "stopwatch") {
+                stopwatchRunning ? stopStopwatch() : startStopwatch();
+            } else if (mode === "tabata") {
+                if (timerRunning) handleTabataStop();
+                else startTabata();
+            } else if (mode === "timer") {
+                if (timerRunning) handleTimerStop();
+                else stopTimer(); 
+            }
+        } 
+        else if (key === "escape") {
+            mode === "stopwatch" ? resetStopwatch() : resetTimer();
+        }
+        else if (key === "t") {
+            if (!timerRunning && !stopwatchRunning) {
+                let newMode = "timer";
+                if (mode === "timer") newMode = "tabata";
+                else if (mode === "tabata") newMode = "stopwatch";
+                
+                document.getElementById(newMode + "_radio").checked = true;
+                switchMode(newMode);
+            }
+        }
+        else if (key === "m") {
+            toggleMute();
+        }
+        else if (key === "f") {
+            toggleFullscreen();
+        }
+
+        if (mode === "timer" && !timerRunning) {
+            if (['1','3','4','5','7'].includes(key)) {
+                const map = {'1':'btn-1m','3':'btn-3m','4':'btn-4m','5':'btn-5m','7':'btn-7m'};
+                handleTimerClick(parseInt(key), map[key]);
+            } else if (key === '0') {
+                handleTimerClick(10, 'btn-10m');
+            } else if (key === 'r') {
+                handleRandomClick('btn-rnd');
+            }
+        }
+    });
+    
+    // --- Page Load Enforcement ---
+    window.addEventListener('load', () => {
+        // Enforce 60s break default to beat browser caching
+        document.getElementById('break60').checked = true;
+        breakDuration = 60;
+    });
+</script>
+</body>
+</html>

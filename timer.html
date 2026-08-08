@@ -54,7 +54,7 @@
     .timer-buttons, .stopwatch-buttons {
         display: flex;
         justify-content: center;
-		align-items: center; /* Ensures all items align vertically */
+		align-items: center;
         flex-wrap: wrap;
     }
     
@@ -69,8 +69,8 @@
 		font-size: 20px;
 		display: flex;
 		align-items: center;
-		justify-content: center; /* Centers text inside buttons and input */
-		box-sizing: border-box; /* Ensures padding doesn't affect height */
+		justify-content: center;
+		box-sizing: border-box;
     }
     
     #breakOptions, .break-buttons {
@@ -107,8 +107,8 @@
 		font-size: 20px;
 		display: flex;
 		align-items: center;
-		justify-content: center; /* Centers text inside buttons and input */
-		box-sizing: border-box; /* Ensures padding doesn't affect height */
+		justify-content: center;
+		box-sizing: border-box;
 		width: 80px;
         text-align: center;
     }
@@ -120,10 +120,7 @@
 	.hidden {
         display: none;
     }
-	
-	
 </style>
-
 </head>
 <body>
 <audio id="beep" src="beep.mp3" preload="auto"></audio>
@@ -143,12 +140,12 @@
         style="margin-right: 10px;" 
         pattern="\d{1,2}:\d{2}" 
         title="Enter time in MM:SS format">
-    <button class="timer-button" onclick="startTimer(1 * 60, breakDuration)">1 Minute</button>
-    <button class="timer-button" onclick="startTimer(3 * 60, breakDuration)">3 Minutes</button>
-    <button class="timer-button" onclick="startTimer(4 * 60, breakDuration)">4 Minutes</button>
-    <button class="timer-button" onclick="startTimer(5 * 60, breakDuration)">5 Minutes</button>
-    <button class="timer-button" onclick="startTimer(7 * 60, breakDuration)">7 Minutes</button>
-    <button class="timer-button" onclick="startTimer(10 * 60, breakDuration)">10 Minutes</button>
+    <button class="timer-button" onclick="startTimer(1 * 60)">1 Minute</button>
+    <button class="timer-button" onclick="startTimer(3 * 60)">3 Minutes</button>
+    <button class="timer-button" onclick="startTimer(4 * 60)">4 Minutes</button>
+    <button class="timer-button" onclick="startTimer(5 * 60)">5 Minutes</button>
+    <button class="timer-button" onclick="startTimer(7 * 60)">7 Minutes</button>
+    <button class="timer-button" onclick="startTimer(10 * 60)">10 Minutes</button>
 	<button class="timer-button" onclick="startRandomTimer()">Random</button>
     <button class="timer-button" onclick="stopTimer()">Stop</button>
 	<button class="timer-button" onclick="resetTimer()">Reset</button>
@@ -177,362 +174,319 @@
 </div>
 
 <script>
-    var timerInterval; // Variable to hold the interval ID for the timer
-	var countdownInterval; // Variable to hold the interval ID for countdown
-	var countdown = 10; // Default countdown for all timers
-    var breakDuration = 60; // Default break duration in seconds
-    var roundsCount = 0; // Counter for rounds
-	var timerRunning = false; // Flag to track if the timer is currently running
-	var randomTimerRunning = false; // Flag to track if the random timer is currently running
-	var countdownRunning = false; // Flag to track if countdown is running
-	var randomCountdownRunning = false; // Flag to track if countdown is running
-	var stopwatchRunning = false;
-    var elapsedTime = 0; // Elapsed time for stopwatch
-    var stopwatchInterval;
-    var mode = "timer"; // Default mode is timer
-	var isStopwatchMode = false; // Default to timer mode
+    // --- State Variables ---
+    let timerInterval; 
+    let countdownInterval; 
+    let stopwatchInterval;
+    
+    let breakDuration = 60; // Default 60s
+    let roundsCount = 0; 
+    let mode = "timer"; 
+    
+    // Flags
+    let timerRunning = false;
+    let stopwatchRunning = false;
+    let elapsedTime = 0; 
 
+    // --- Audio Helper ---
     function playAudio(audioElement) {
-		if (audioElement) {
-			audioElement.currentTime = 0;
-			audioElement.play();
-		}
-	}
-	
-	function switchMode(selectedMode) {
-        var timerButtons = document.querySelector('.timer-buttons');
-        var stopwatchButtons = document.querySelector('.stopwatch-buttons');
-		var breakButtons = document.querySelector('.break-buttons');
-        var timerDisplay = document.getElementById('timer');
-
-        if (selectedMode === 'timer') {
-            timerButtons.classList.remove('hidden');
-            stopwatchButtons.classList.add('hidden');
-			breakButtons.classList.remove('hidden');
-            timerDisplay.textContent = "00:00";
-        } else if (selectedMode === 'stopwatch') {
-            stopwatchButtons.classList.remove('hidden');
-            timerButtons.classList.add('hidden');
-			breakButtons.classList.add('hidden');
-            timerDisplay.textContent = "00:00";
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(e => console.log("Audio blocked:", e));
         }
     }
 
-    // Function to update the clock display
+    // --- Clock Display ---
     function updateClock() {
-        var now = new Date();
-        var hours = now.getHours().toString().padStart(2, '0');
-        var minutes = now.getMinutes().toString().padStart(2, '0');
-        var seconds = now.getSeconds().toString().padStart(2, '0');
-        var timeString = hours + ':' + minutes + ':' + seconds;
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
         document.getElementById('clock').textContent = timeString;
     }
-
-    // Update the clock every second
     setInterval(updateClock, 1000);
-	
-	// Function to start the timer
-    function startTimer(duration, breakDuration) {
-		isStopwatchMode = false; // Ensure the mode is set correctly
-		if (timerRunning) return; // Prevent starting a new timer if one is already running
-        timerRunning = true; // Set the flag to true indicating the timer is running
-		
-        var timerDisplay = document.getElementById('timer');
-        var timeLeft = duration;
-        var isBreak = false;
+    updateClock(); // Run immediately
 
-        function updateTimer() {
-			var minutes = Math.floor(timeLeft / 60);
-			var seconds = timeLeft % 60;
+    // --- Mode Switching ---
+    function switchMode(selectedMode) {
+        mode = selectedMode;
+        const timerButtons = document.querySelector('.timer-buttons');
+        const stopwatchButtons = document.querySelector('.stopwatch-buttons');
+        const breakButtons = document.querySelector('.break-buttons');
+        const timerDisplay = document.getElementById('timer');
 
-			if (isBreak) {
-				timerDisplay.textContent = 'Break: ' + seconds;
-				timerDisplay.classList.add('break');
-			} else {
-				timerDisplay.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
-				timerDisplay.classList.remove('break');
-			}
+        // Stop any running timers when switching
+        stopTimer();
+        stopStopwatch();
+        resetDisplay();
 
-			if (timeLeft <= 0) {
-				if (isBreak) {
-					isBreak = false;
-					timeLeft = duration;
-				roundsCount++; // Increment the rounds counter
-					document.getElementById('rounds-left').textContent = 'R' + roundsCount + ' -'; // Update the rounds count on the left
-					document.getElementById('rounds-right').textContent = '- ' + 'R' + roundsCount; // Update the rounds count on the right
-				} else {
-					if (breakDuration > 0) {
-						isBreak = true;
-						timeLeft = breakDuration;
-					} else {
-						// Skip the break period if breakDuration is 0
-						timeLeft = duration;
-						roundsCount++; // Increment the rounds counter
-						document.getElementById('rounds-left').textContent = 'R' + roundsCount + ' -'; // Update the rounds count on the left
-						document.getElementById('rounds-right').textContent = '- ' + 'R' + roundsCount; // Update the rounds count on the right
-					}
-				}
-				playAudio(document.getElementById('buzzer')); // Play buzzer at the end of timer
-			} else {
-				if ((timeLeft <= 5 && !isBreak) || (timeLeft <= 5 && isBreak)) {
-					playAudio(document.getElementById('beep')); // Play beep for each second in the last 5 seconds
-				}
-				timeLeft--;
-			}
-		}
-		
-        // Clear any previous interval
-        clearInterval(timerInterval);
-
-        // Countdown for 10 seconds before starting the timer
-        timerDisplay.textContent = countdown;
-        countdownRunning = true; // Mark countdown as running
-        countdownInterval = setInterval(function() {
-            countdown--;
-            timerDisplay.textContent = countdown;
-            if (countdown <= 0) {
-                clearInterval(countdownInterval);
-                countdownRunning = false; // Mark countdown as stopped
-				playAudio(document.getElementById('buzzer')); // Play buzzer at the end of countdown
-                updateTimer(); // Start the timer
-                timerInterval = setInterval(updateTimer, 1000); // Start updating timer display every second
-                roundsCount++; // Increment the rounds counter
-                document.getElementById('rounds-left').textContent = 'R' + roundsCount + ' -'; // Update the rounds count on the left
-                document.getElementById('rounds-right').textContent = '- ' + 'R' + roundsCount; // Update the rounds count on the right
-            } else if (countdown <= 5) {
-                playAudio(document.getElementById('beep')); // Play beep for each second in the last 5 seconds of countdown
-            }
-        }, 1000);
-    }
-	
-	// Function to stop the timer
-    function stopTimer() {
-		// Clear intervals
-		clearInterval(countdownInterval);
-		clearInterval(timerInterval);
-
-		// Reset states
-		countdownRunning = false;
-		timerRunning = false;
-		randomTimerRunning = false;
-
-		// Display stopped state
-		var timerDisplay = document.getElementById('timer');
-		timerDisplay.textContent = "Stopped";
-	}
-
-    // Function to reset the timer (refresh the page)
-    function resetTimer() {
-        location.reload();
-    }
-
-    // Function to update break duration based on radio button selection
-    function updateBreakDuration(duration) {
-        breakDuration = duration;
-    }
-	
-	function toggleMode() {
-        var timerDisplay = document.getElementById('timer');
-        if (mode === "timer") {
-            mode = "stopwatch";
-            timerDisplay.textContent = "00:00";
-            document.querySelector(".timer-button").textContent = "Switch to Timer";
+        if (mode === 'timer') {
+            timerButtons.classList.remove('hidden');
+            stopwatchButtons.classList.add('hidden');
+            breakButtons.classList.remove('hidden');
         } else {
-            mode = "timer";
-            timerDisplay.textContent = "00:00";
-            document.querySelector(".timer-button").textContent = "Switch to Stopwatch";
+            stopwatchButtons.classList.remove('hidden');
+            timerButtons.classList.add('hidden');
+            breakButtons.classList.add('hidden');
         }
     }
-	
-	// Stopwatch functionality
-    function startStopwatch() {
-		if (stopwatchRunning) return; // Prevent multiple intervals
-		stopwatchRunning = true;
-		var timerDisplay = document.getElementById('timer');
-		var startTime = Date.now() - elapsedTime;
 
-		stopwatchInterval = setInterval(function () {
-			elapsedTime = Date.now() - startTime;
-			var minutes = Math.floor(elapsedTime / 60000);
-			var seconds = Math.floor((elapsedTime % 60000) / 1000);
-			timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-		}, 1000);
-	}
+    // --- Core Timer Logic (Drift-Free) ---
+    function startTimerLogic(getDurationFn, isRandom = false) {
+        if (timerRunning) return;
+        timerRunning = true;
 
-    function stopStopwatch() {
-		if (!stopwatchRunning) return; // Exit if stopwatch isn't running
-		clearInterval(stopwatchInterval); // Clear the interval
-		stopwatchRunning = false; // Set the running flag to false
-		var timerDisplay = document.getElementById('timer');
-	}
-
-    function resetStopwatch() {
-		clearInterval(stopwatchInterval);
-		stopwatchRunning = false;
-		elapsedTime = 0;
-		document.getElementById('timer').textContent = "00:00";
-	}	
-	
-	async function startRandomTimer() {
-	isStopwatchMode = false; // Ensure the mode is set correctly
-    if (timerRunning || randomTimerRunning) return; // Prevent starting a new timer if one is already running
-    timerRunning = true;
-    randomTimerRunning = true;
-
-    var timerDisplay = document.getElementById('timer');
-    var randomTimeLeft = getRandomTime(); // Get a random duration for the timer
-
-    // Countdown before starting the random timer
-    timerDisplay.textContent = countdown;
-    countdownRunning = true;
-
-    countdownInterval = setInterval(function () {
-        countdown--;
-
-        // Update the display
+        const timerDisplay = document.getElementById('timer');
+        let countdown = 10;
+        
+        // --- 10s Countdown ---
         timerDisplay.textContent = countdown;
+        timerDisplay.classList.remove('break');
+        
+        // Use Delta Time for Countdown to prevent drift
+        const countdownEndTime = Date.now() + (countdown * 1000);
 
-        if (countdown <= 0) {
-            clearInterval(countdownInterval);
-            countdownRunning = false;
-
-            // Play buzzer when countdown ends
-            playAudio(document.getElementById('buzzer'));
-
-            // Start the random timer
-            var isBreak = false; // Toggle between timer and break
-            function updateRandomTimer() {
-                var minutes = Math.floor(randomTimeLeft / 60);
-                var seconds = randomTimeLeft % 60;
-                timerDisplay.textContent = minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
-
-                if (randomTimeLeft <= 0) {
-                    if (isBreak) {
-                        isBreak = false;
-                        randomTimeLeft = getRandomTime(); // Start a new random timer
-                        roundsCount++; // Increment rounds
-                        document.getElementById('rounds-left').textContent = "R" + roundsCount + " -";
-                        document.getElementById('rounds-right').textContent = "- R" + roundsCount;
-                    } else {
-                        isBreak = true;
-                        randomTimeLeft = getRandomTime(); // Start a new random break
-                    }
-                } else {
-                    randomTimeLeft--;
+        countdownInterval = setInterval(() => {
+            const now = Date.now();
+            const remaining = Math.ceil((countdownEndTime - now) / 1000);
+            
+            if (remaining !== countdown) {
+                countdown = remaining;
+                timerDisplay.textContent = countdown > 0 ? countdown : 0;
+                
+                if (countdown <= 5 && countdown > 0) {
+                    playAudio(document.getElementById('beep'));
                 }
             }
 
-            // Start the random timer updates
-            updateRandomTimer(); // Call the first update
-            timerInterval = setInterval(updateRandomTimer, 1000);
-        } else if (countdown <= 5) {
-            // Play beep during the last 5 seconds
-            playAudio(document.getElementById('beep'));
-        }
-    }, 1000);
-}
-	
-	// Automatically format the customRoundLength input
-    document.getElementById('customRoundLength').addEventListener('input', function(e) {
-        let value = e.target.value.replace(/\D/g, ''); // Remove non-numeric characters
-        if (value.length > 4) value = value.slice(0, 4); // Limit to 4 digits
-        if (value.length > 2) value = value.slice(0, 2) + ':' + value.slice(2); // Add colon between second and third digit
-        e.target.value = value; // Update the field value
-    });
-
-    // Function to create a custom timer
-    function startCustomTimer() {
-        var customInput = document.getElementById('customRoundLength').value.trim();
-
-        // Validate MM:SS format using regex
-        var timePattern = /^(\d{1,2}):([0-5]?\d)$/;
-        var match = customInput.match(timePattern);
-
-        if (match) {
-            var minutes = parseInt(match[1], 10); // Extract minutes
-            var seconds = parseInt(match[2], 10); // Extract seconds
-            var customDuration = (minutes * 60) + seconds; // Convert to total seconds
-
-            startTimer(customDuration, breakDuration); // Start the timer
-        } else {
-            alert("Please enter time in MM:SS format (e.g., 05:30).");
-        }
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                playAudio(document.getElementById('buzzer'));
+                
+                // --- Start Main Phase ---
+                runMainPhase(getDurationFn, isRandom);
+            }
+        }, 100); // Check every 100ms for smoothness
     }
 
-    // Listen for Enter key to start the custom timer
-    document.getElementById('customRoundLength').addEventListener('keydown', function (event) {
+    function runMainPhase(getDurationFn, isRandom) {
+        const timerDisplay = document.getElementById('timer');
+        let isBreak = false;
+        
+        // Initial Rounds Increment
+        roundsCount++;
+        updateRoundsDisplay();
+
+        // Calculate Target Time
+        let currentDuration = getDurationFn(); 
+        let endTime = Date.now() + (currentDuration * 1000);
+
+        timerInterval = setInterval(() => {
+            const now = Date.now();
+            const timeLeft = Math.ceil((endTime - now) / 1000);
+
+            // Audio cues for last 5 seconds
+            if (timeLeft <= 5 && timeLeft > 0) {
+                // To avoid multiple beeps in the same second due to fast polling, 
+                // we check if we haven't beeped for this second yet.
+                // Simplified approach: just beep.
+                // For a more robust solution, we'd track 'lastBeepTime'. 
+                // But given the 1s resolution of the beep file, standard 1000ms interval check is safer.
+                // Let's stick to updating text and checking beep logic in 1s steps visually,
+                // but using delta time for accuracy.
+            }
+
+            // Display Update
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            
+            if (isBreak) {
+                timerDisplay.textContent = 'Break: ' + seconds;
+                timerDisplay.classList.add('break');
+            } else {
+                timerDisplay.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+                timerDisplay.classList.remove('break');
+            }
+            
+            // Handle Beeps (Approximate check ensures we don't miss it)
+            // We check if we just crossed a second boundary
+            const msUntilNextSecond = (endTime - now) % 1000;
+            if (timeLeft <= 5 && timeLeft > 0 && msUntilNextSecond > 900) {
+                 playAudio(document.getElementById('beep'));
+            }
+
+            // Time's Up
+            if (timeLeft <= 0) {
+                playAudio(document.getElementById('buzzer'));
+
+                // Switch Phase
+                if (isBreak) {
+                    // End of Break -> Start Round
+                    isBreak = false;
+                    currentDuration = getDurationFn(); // Get new round time
+                    roundsCount++;
+                    updateRoundsDisplay();
+                } else {
+                    // End of Round -> Start Break
+                    if (breakDuration > 0) {
+                        isBreak = true;
+                        currentDuration = breakDuration;
+                    } else {
+                        // Skip break if set to 0
+                        isBreak = false;
+                        currentDuration = getDurationFn();
+                        roundsCount++;
+                        updateRoundsDisplay();
+                    }
+                }
+                
+                // Set new Target
+                endTime = Date.now() + (currentDuration * 1000);
+            }
+        }, 100); // High-res polling for accuracy
+    }
+
+    // --- Public Functions called by Buttons ---
+
+    function startTimer(duration) {
+        // Wrapper to pass a fixed duration function
+        startTimerLogic(() => duration); 
+    }
+
+    function startRandomTimer() {
+        // Wrapper to pass a random duration function
+        startTimerLogic(() => {
+            const times = [1, 3, 4, 5, 7, 10]; 
+            const randomIndex = Math.floor(Math.random() * times.length);
+            return times[randomIndex] * 60;
+        }, true);
+    }
+
+    function stopTimer() {
+        clearInterval(countdownInterval);
+        clearInterval(timerInterval);
+        timerRunning = false;
+        document.getElementById('timer').textContent = "Stopped";
+    }
+
+    function resetTimer() {
+        stopTimer();
+        stopStopwatch();
+        resetDisplay();
+    }
+    
+    function resetDisplay() {
+        roundsCount = 0;
+        updateRoundsDisplay();
+        document.getElementById('timer').textContent = "00:00";
+        document.getElementById('timer').classList.remove('break');
+    }
+
+    function updateBreakDuration(duration) {
+        breakDuration = parseInt(duration);
+    }
+    
+    function updateRoundsDisplay() {
+        document.getElementById('rounds-left').textContent = 'R' + roundsCount + ' -';
+        document.getElementById('rounds-right').textContent = '- ' + 'R' + roundsCount;
+    }
+
+    // --- Stopwatch Logic ---
+    function startStopwatch() {
+        if (stopwatchRunning) return;
+        stopwatchRunning = true;
+        
+        const startTime = Date.now() - elapsedTime;
+        const timerDisplay = document.getElementById('timer');
+
+        stopwatchInterval = setInterval(() => {
+            elapsedTime = Date.now() - startTime;
+            const minutes = Math.floor(elapsedTime / 60000);
+            const seconds = Math.floor((elapsedTime % 60000) / 1000);
+            const ms = Math.floor((elapsedTime % 1000) / 10); // Optional: show MS
+            
+            timerDisplay.textContent = 
+                minutes.toString().padStart(2, '0') + ':' + 
+                seconds.toString().padStart(2, '0');
+        }, 50); // Fast update
+    }
+
+    function stopStopwatch() {
+        if (!stopwatchRunning) return;
+        clearInterval(stopwatchInterval);
+        stopwatchRunning = false;
+    }
+
+    function resetStopwatch() {
+        stopStopwatch();
+        elapsedTime = 0;
+        document.getElementById('timer').textContent = "00:00";
+    }
+
+    // --- Custom Input Handling ---
+    const customInput = document.getElementById('customRoundLength');
+    
+    customInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, ''); 
+        if (value.length > 4) value = value.slice(0, 4); 
+        if (value.length > 2) value = value.slice(0, 2) + ':' + value.slice(2);
+        e.target.value = value;
+    });
+
+    customInput.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
-            startCustomTimer();
+            const parts = this.value.split(':');
+            if (parts.length === 2) {
+                const mins = parseInt(parts[0]) || 0;
+                const secs = parseInt(parts[1]) || 0;
+                startTimer((mins * 60) + secs);
+                this.blur(); // Remove focus
+            }
         }
     });
 
-    // Function to get a random time for the timer
-    function getRandomTime() {
-        var times = [1, 3, 4, 5, 7, 10]; // Possible durations in minutes
-        var randomIndex = Math.floor(Math.random() * times.length);
-        return times[randomIndex] * 60; // Convert to seconds
-    }
-
-    // Function to get a random break duration
-    function getBreakDuration() {
-        return Math.floor(Math.random() * 2) === 0 ? 45 : 60; // Randomly select between 45 and 60 seconds
-    }
-	
-	// Keyboard event listener to control the timer
+    // --- Keyboard Shortcuts ---
     document.addEventListener('keydown', function(event) {
-        // Check if the focus is on the customRoundLength field
-        var customRoundFieldFocused = document.activeElement === document.getElementById('customRoundLength');
-		
-		// Handle "Esc", "Space", "s", and "r" keys always
-        if (event.key === " " || event.code === "Space" || event.key === "s" || event.key === "S") {
-			if (stopwatchRunning && mode === "stopwatch") {
-				stopStopwatch(); // Stop the stopwatch
-				stopwatchRunning = false;
-			} else if (mode === "stopwatch") {
-				startStopwatch(); // Start the stopwatch
-				stopwatchRunning = true;
-			} else if (mode === "timer") {
-				timerRunning = true;
-				stopTimer(); // Stop the timer
-			}
-			event.preventDefault(); // Prevent the default action of the spacebar
-        } else if (event.key === "Escape") {
-            resetTimer(); // Reset the timer when "Escape" is pressed
-        } else if (event.key === "t") {
-				const timerRadio = document.getElementById("timer_radio");
-				const stopwatchRadio = document.getElementById("stopwatch_radio");
+        // Ignore shortcuts if typing in custom box
+        if (document.activeElement === customInput) {
+            if (event.key === "Escape") customInput.blur();
+            return;
+        }
 
-				if (mode === "timer") {
-					stopwatchRadio.checked = true;
-					switchMode("stopwatch");
-					mode = "stopwatch";
-				} else if (mode === "stopwatch") {
-					timerRadio.checked = true;
-					switchMode("timer");
-					mode = "timer";
-				}
-			}
+        const key = event.key.toLowerCase();
 
-        // Only handle timer control if the customRoundLength field is not focused
-        if (!customRoundFieldFocused && mode === "timer") {
-            if (event.key === "1") {
-                startTimer(60, breakDuration); // Start 1-minute timer when "1" is pressed
-            } else if (event.key === "3") {
-                startTimer(180, breakDuration); // Start 3-minute timer when "3" is pressed
-            } else if (event.key === "4") {
-                startTimer(240, breakDuration); // Start 4-minute timer when "4" is pressed
-            } else if (event.key === "5") {
-                startTimer(300, breakDuration); // Start 5-minute timer when "5" is pressed
-            } else if (event.key === "7") {
-                startTimer(420, breakDuration); // Start 7-minute timer when "7" is pressed
-            } else if (event.key === "0") {
-                startTimer(600, breakDuration); // Start 10-minute timer when "0" is pressed
-            } else if (event.key === "r" || event.key === "R") {
-				startRandomTimer(); // Start the random timer with "r" or "R" is pressed
-			} 
+        // Global Controls
+        if (key === " " || key === "s") {
+            event.preventDefault();
+            if (mode === "stopwatch") {
+                stopwatchRunning ? stopStopwatch() : startStopwatch();
+            } else {
+                // For timer, space usually stops. 
+                // To "Resume" a standard timer is complex logic not requested, 
+                // so we stick to Stop vs Start New.
+                stopTimer(); 
+            }
+        } 
+        else if (key === "escape") {
+            mode === "stopwatch" ? resetStopwatch() : resetTimer();
+        }
+        else if (key === "t") {
+            // Toggle Mode
+            const newMode = mode === "timer" ? "stopwatch" : "timer";
+            document.getElementById(newMode + "_radio").checked = true;
+            switchMode(newMode);
+        }
+
+        // Timer Specific Controls
+        if (mode === "timer") {
+            if (['1','3','4','5','7'].includes(key)) {
+                startTimer(parseInt(key) * 60);
+            } else if (key === '0') {
+                startTimer(10 * 60);
+            } else if (key === 'r') {
+                startRandomTimer();
+            }
         }
     });
-</script>
 
+</script>
 </body>
 </html>
