@@ -105,14 +105,35 @@
     #timer.break-text { font-size: 14vw; }
     #timer.interval-text { font-size: 10vw; }
     #timer.stopwatch-text { font-size: 13vw; }
-    
-    .sw-unit { display: inline-block; width: 1.6em; text-align: right; }
+
+    /* Fixed-width digit slots so a narrow "1" doesn't narrow its column
+       and shift the colon/other digits - font-variant-numeric: tabular-nums
+       above doesn't help here since Orbitron's webfont has no tabular
+       numeral table for browsers to use. */
+    .timer-digit { display: inline-block; width: 0.72em; text-align: center; }
+    .timer-char { display: inline-block; }
+
+    /* sw-unit no longer needs a fixed width/right-align itself - each
+       digit inside it (.timer-digit) now has its own fixed-width slot. */
+    .sw-unit { display: inline-block; white-space: nowrap; }
     .sw-sep { display: inline-block; width: 0.4em; text-align: center; opacity: 0.7; }
 
     #clock {
-        font-size: 8vw; 
+        font-size: 8vw;
         opacity: 0.7;
-        transition: opacity 0.3s;
+        transition: opacity 0.3s, font-size 0.3s;
+        /* Without this, the per-character spans used for fixed-width
+           digits give the browser a line-break opportunity between them
+           (unlike a single unbroken text node), so the clock could wrap
+           onto two lines under horizontal pressure. */
+        white-space: nowrap;
+    }
+
+    /* Tabata mode: keep the clock on screen, just small enough to leave
+       room for the SET/INT labels next to it. */
+    #clock.mini-clock {
+        font-size: 3vw;
+        opacity: 0.5;
     }
 
     #clock-and-rounds {
@@ -130,29 +151,53 @@
     }
 
     .round-indicator {
-        font-size: 6vw; 
-        width: 35%;     
-        white-space: nowrap; 
+        font-size: 6vw;
+        width: 35%;
+        white-space: nowrap;
     }
-    
+
     #rounds-left { text-align: left; }
     #rounds-right { text-align: right; }
 
-    /* --- Mobile Tweak --- */
+    /* --- Mobile Tweak ---
+       Stack vertically instead of squeezing three items onto one row -
+       at narrow widths the row layout let the clock and round labels
+       collide/overlap regardless of font-size tuning. */
     @media (max-width: 600px) {
-        #clock { font-size: 12vw; }
-        .round-indicator { font-size: 8vw; }
+        #clock-and-rounds {
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        #clock-and-rounds.wide-mode {
+            width: 100% !important;
+        }
+        #clock { font-size: 12vw; order: 2; }
+        #clock.mini-clock { font-size: 5vw; }
+        .round-indicator {
+            width: auto;
+            font-size: 8vw;
+            text-align: center !important;
+        }
+        #rounds-left { order: 1; }
+        #rounds-right { order: 3; }
     }
 
-    /* --- Focus Mode --- */
-    body.running .control-section {
-        opacity: 0.3; 
-        pointer-events: none; 
-        transition: opacity 1s ease;
-    }
-    body.running:hover .control-section {
-        opacity: 1; 
-        pointer-events: auto;
+    /* --- Focus Mode ---
+       Only dim controls for real mouse/trackpad users who can hover to
+       bring them back. Touch devices report (hover: none) and never fire
+       a real :hover, so gating this behind the media query keeps controls
+       visible and tappable at all times on phones/tablets. */
+    @media (hover: hover) and (pointer: fine) {
+        body.running .control-section {
+            opacity: 0.3;
+            pointer-events: none;
+            transition: opacity 1s ease;
+        }
+        body.running:hover .control-section {
+            opacity: 1;
+            pointer-events: auto;
+        }
     }
 
     /* --- Controls & UI --- */
@@ -448,8 +493,8 @@
 <div id="timer">00:00</div>
 
 <div class="control-section">
-    <div style="margin-bottom: 5px; margin-top: 10px; text-align: center;">
-        <input type="radio" id="timer_radio" name="mode" value="timer" onchange="switchMode('timer')" checked> 
+    <div id="mode-select-row" style="margin-bottom: 5px; margin-top: 10px; text-align: center;">
+        <input type="radio" id="timer_radio" name="mode" value="timer" onchange="switchMode('timer')" checked>
         <label for="timer_radio">TIMER</label>
         
         <input type="radio" id="tabata_radio" name="mode" value="tabata" onchange="switchMode('tabata')"> 
@@ -483,12 +528,17 @@
             <span class="settings-label">s</span>
         </div>
         <div>
-            <span class="settings-label">INT/RND:</span>
+            <span class="settings-label">INT/SET:</span>
             <input type="number" id="tabIntervals" class="small-input" value="5" min="1" max="99">
         </div>
         <div>
-            <span class="settings-label">ROUNDS:</span>
+            <span class="settings-label">SETS:</span>
             <input type="number" id="tabRounds" class="small-input" value="5" min="1" max="99">
+        </div>
+        <div>
+            <span class="settings-label">SET REST:</span>
+            <input type="number" id="tabSetRest" class="small-input" value="60" min="0" max="999">
+            <span class="settings-label">s</span>
         </div>
     </div>
 
@@ -575,7 +625,7 @@
 
     let tabataState = {
         set: 1, interval: 1, phase: 'init', workTime: 20, restTime: 10,
-        intervalsPerRound: 5, maxSets: 5, remainingMs: 0, totalPhaseTime: 0, endTime: 0
+        intervalsPerRound: 5, maxSets: 5, setRestTime: 60, remainingMs: 0, totalPhaseTime: 0, endTime: 0
     };
 
     // --- Theme Logic ---
@@ -696,6 +746,28 @@
         document.getElementById('progress-fill').style.width = percent + '%';
     }
 
+    // Renders text into an element with each character in a fixed-width
+    // slot, so a narrow character like "1" doesn't shrink its column and
+    // shift the colon/other digits sideways (the font isn't a monospace
+    // font, and Orbitron's webfont doesn't honor tabular-nums).
+    function renderFixedWidthText(el, str) {
+        let html = '';
+        for (const ch of String(str)) {
+            if (ch >= '0' && ch <= '9') {
+                html += '<span class="timer-digit">' + ch + '</span>';
+            } else if (ch === ' ') {
+                html += '<span class="timer-char">&nbsp;</span>';
+            } else {
+                html += '<span class="timer-char">' + ch + '</span>';
+            }
+        }
+        el.innerHTML = html;
+    }
+
+    function setTimerText(str) {
+        renderFixedWidthText(document.getElementById('timer'), str);
+    }
+
     function highlightButton(btnId) {
         document.querySelectorAll('.timer-buttons button').forEach(b => b.classList.remove('active-btn'));
         if (btnId) {
@@ -722,6 +794,7 @@
         document.getElementById('tabRest').disabled = disable;
         document.getElementById('tabIntervals').disabled = disable;
         document.getElementById('tabRounds').disabled = disable;
+        document.getElementById('tabSetRest').disabled = disable;
     }
 
     function toggleModeLock(disable) {
@@ -730,11 +803,31 @@
         document.getElementById('stopwatch_radio').disabled = disable;
     }
 
+    // While Tabata is actively counting down (not paused, not idle), hide
+    // the mode-select row and the work/rest/rounds config so the screen
+    // stays clean during the workout. Pressing STOP (pause) or fully
+    // stopping brings them back.
+    function setTabataControlsHidden(hide) {
+        document.getElementById('mode-select-row').classList.toggle('hidden', hide);
+        document.getElementById('tabata-settings').classList.toggle('hidden', hide);
+    }
+
+    // Same idea for the standard Timer: while it's actively running (prep
+    // or counting down), hide everything except STOP/RESET. Pausing (STOP)
+    // brings them back; resuming hides them again.
+    function setTimerControlsHidden(hide) {
+        document.getElementById('mode-select-row').classList.toggle('hidden', hide);
+        document.getElementById('settings-row').classList.toggle('hidden', hide);
+        document.getElementById('customRoundLength').classList.toggle('hidden', hide);
+        document.querySelectorAll('.time-select-btn').forEach(btn => btn.classList.toggle('hidden', hide));
+        document.querySelector('.break-buttons').classList.toggle('hidden', hide);
+    }
+
     // --- Clock Display ---
     function updateClock() {
         const now = new Date();
         const timeString = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
-        document.getElementById('clock').textContent = timeString;
+        renderFixedWidthText(document.getElementById('clock'), timeString);
     }
     setInterval(updateClock, 1000);
     updateClock();
@@ -771,6 +864,7 @@
         
         // Reset Clock & Rounds Visibility & Alignment (Default Timer behavior)
         clockDiv.classList.remove('hidden');
+        clockDiv.classList.remove('mini-clock');
         roundsLeft.classList.remove('hidden');
         roundsRight.classList.remove('hidden');
         clockContainer.style.justifyContent = 'space-between';
@@ -793,9 +887,10 @@
             tabataButtons.classList.remove('hidden');
             tabataSettings.classList.remove('hidden');
             
-            // HIDE CLOCK IN TABATA to prevent overlap
-            clockDiv.classList.add('hidden');
-            
+            // Keep the clock visible in Tabata, just shrink it so it
+            // doesn't compete with the SET/INT labels for room.
+            clockDiv.classList.add('mini-clock');
+
             // USE WIDE MODE
             clockContainer.classList.add('wide-mode');
         } 
@@ -827,6 +922,7 @@
         
         toggleTimeButtons(true);
         toggleModeLock(true);
+        setTimerControlsHidden(true);
         requestWakeLock();
 
         // Initialize State
@@ -842,11 +938,11 @@
         const timerDisplay = document.getElementById('timer');
         let countdown = parseInt(document.getElementById('prepTime').value) || 10;
         
-        timerDisplay.textContent = countdown;
+        setTimerText(countdown);
         setStatus('ready');
         timerDisplay.classList.remove('break-text');
-        updateProgressBar(100); 
-        
+        updateProgressBar(100);
+
         const countdownEndTime = Date.now() + (countdown * 1000);
 
         if(countdown <= 0) {
@@ -861,7 +957,7 @@
             
             if (remaining !== countdown) {
                 countdown = remaining;
-                timerDisplay.textContent = countdown > 0 ? countdown : 0;
+                setTimerText(countdown > 0 ? countdown : 0);
                 if (countdown <= 3 && countdown > 0) playAudio(document.getElementById('beep'));
             }
 
@@ -917,12 +1013,12 @@
             updateProgressBar(percent);
 
             if (timerState.phase === 'break') {
-                timerDisplay.textContent = 'BREAK ' + seconds;
+                setTimerText('BREAK ' + seconds);
                 timerDisplay.classList.add('break-text');
                 if (timeLeftCeil <= 5) setStatus('warn');
                 else setStatus('break');
             } else {
-                timerDisplay.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+                setTimerText(minutes + ':' + (seconds < 10 ? '0' : '') + seconds);
                 timerDisplay.classList.remove('break-text');
                 if (timeLeftCeil <= 10) setStatus('warn');
                 else setStatus('go');
@@ -952,7 +1048,7 @@
         if (timerState.phase === 'work') {
             if (timerState.roundsCount >= timerState.maxRounds) {
                 stopTimer();
-                document.getElementById('timer').textContent = "DONE";
+                setTimerText("DONE");
                 speak("Workout Complete");
                 return;
             }
@@ -984,15 +1080,17 @@
             const now = Date.now();
             timerState.remainingMs = timerState.endTime - now;
             isPaused = true;
-            setStatus('paused'); 
+            setStatus('paused');
             btn.textContent = "RESUME";
             btn.classList.remove('btn-stop');
             btn.classList.add('btn-resume');
+            setTimerControlsHidden(false);
         } else {
             isPaused = false;
             btn.textContent = "STOP";
             btn.classList.remove('btn-resume');
             btn.classList.add('btn-stop');
+            setTimerControlsHidden(true);
             runTimerStep(true);
         }
     }
@@ -1016,6 +1114,7 @@
         
         toggleTimeButtons(true);
         toggleModeLock(true);
+        setTabataControlsHidden(true);
         requestWakeLock();
 
         // --- READ CONFIGURATION ---
@@ -1023,6 +1122,7 @@
         tabataState.restTime = parseInt(document.getElementById('tabRest').value) || 10;
         tabataState.intervalsPerRound = parseInt(document.getElementById('tabIntervals').value) || 5;
         tabataState.maxSets = parseInt(document.getElementById('tabRounds').value) || 5;
+        tabataState.setRestTime = parseInt(document.getElementById('tabSetRest').value) || 60;
 
         // Initialize State
         tabataState.set = 1;
@@ -1033,21 +1133,21 @@
         const timerDisplay = document.getElementById('timer');
         let countdown = 10; 
         
-        timerDisplay.textContent = countdown;
+        setTimerText(countdown);
         setStatus('ready');
         timerDisplay.classList.remove('break-text');
-        updateProgressBar(100); 
-        
+        updateProgressBar(100);
+
         const countdownEndTime = Date.now() + (countdown * 1000);
         let lastPrepSpoken = -1;
 
         countdownInterval = setInterval(() => {
             const now = Date.now();
             const remaining = Math.ceil((countdownEndTime - now) / 1000);
-            
+
             if (remaining !== countdown) {
                 countdown = remaining;
-                timerDisplay.textContent = countdown > 0 ? countdown : 0;
+                setTimerText(countdown > 0 ? countdown : 0);
             }
             
             if (remaining <= 5 && remaining > 0 && remaining !== lastPrepSpoken) {
@@ -1090,9 +1190,9 @@
                 speech = "Rest";
             } 
             else if (tabataState.phase === 'set_rest') {
-                duration = 60; // Hardcoded set rest, typically 1 min
+                duration = tabataState.setRestTime;
                 setStatus('break');
-                speech = "Rest for one minute";
+                speech = "Set complete. Rest.";
             }
             
             if(speech) speak(speech);
@@ -1115,14 +1215,16 @@
             const exactTimeLeft = (tabataState.endTime - now) / 1000;
             const timeLeftCeil = Math.ceil(exactTimeLeft);
             
+            // Keep the Tabata readout at the same size throughout - no
+            // shrinking to break-text/interval-text like the standard
+            // Timer does, per request.
             if (tabataState.phase === 'set_rest' || tabataState.phase === 'rest') {
-                timerDisplay.textContent = (tabataState.phase === 'set_rest' ? 'REST ' : 'REST ') + timeLeftCeil;
-                timerDisplay.classList.add('break-text');
-                timerDisplay.classList.remove('interval-text');
+                setTimerText('REST ' + timeLeftCeil);
             } else {
-                timerDisplay.textContent = timeLeftCeil;
-                timerDisplay.classList.remove('break-text');
+                setTimerText(timeLeftCeil);
             }
+            timerDisplay.classList.remove('break-text');
+            timerDisplay.classList.remove('interval-text');
 
             let percent = (exactTimeLeft / tabataState.totalPhaseTime) * 100;
             if (percent < 0) percent = 0;
@@ -1152,7 +1254,7 @@
                     tabataState.phase = 'set_rest';
                 } else {
                     stopTimer();
-                    document.getElementById('timer').textContent = "DONE";
+                    setTimerText("DONE");
                     speak("Workout Complete");
                     return;
                 }
@@ -1182,15 +1284,17 @@
             const now = Date.now();
             tabataState.remainingMs = tabataState.endTime - now;
             isPaused = true;
-            setStatus('paused'); 
+            setStatus('paused');
             btn.textContent = "RESUME";
             btn.classList.remove('btn-stop');
             btn.classList.add('btn-resume');
+            setTabataControlsHidden(false);
         } else {
             isPaused = false;
             btn.textContent = "STOP";
             btn.classList.remove('btn-resume');
             btn.classList.add('btn-stop');
+            setTabataControlsHidden(true);
             runTabataStep(true);
         }
     }
@@ -1224,15 +1328,26 @@
         
         toggleTimeButtons(false);
         toggleModeLock(false);
+        // Mode-gated: this fires for any full stop (prep-phase cancel,
+        // RESET, workout complete) regardless of which mode is on screen,
+        // so only unhide the controls that belong to the current mode -
+        // otherwise stopping a Timer run would reveal Tabata's settings
+        // row, and vice versa.
+        if (mode === 'tabata') setTabataControlsHidden(false);
+        if (mode === 'timer') setTimerControlsHidden(false);
         releaseWakeLock();
-        
+
         if (isTabataMode) {
             setMute(previousAudioState.muted);
             setVoice(previousAudioState.voice);
             isTabataMode = false;
-            
-            document.getElementById('clock').classList.remove('hidden');
-            document.getElementById('clock-and-rounds').classList.remove('wide-mode');
+
+            // Don't touch the clock's hidden/wide-mode state here: this
+            // function runs while still on the Tabata tab (e.g. STOP then
+            // RESET), and unhiding the clock left it colliding with the
+            // SET/INT labels in the now-narrower row. switchMode() is the
+            // single source of truth for that layout and already re-applies
+            // it correctly whenever the mode actually changes.
         }
         
         const tBtn = document.getElementById('timer-btn-stop');
@@ -1241,7 +1356,7 @@
         const tabBtn = document.getElementById('tabata-btn-stop');
         if(tabBtn) { tabBtn.textContent = "STOP"; tabBtn.classList.remove('btn-resume'); tabBtn.classList.add('btn-stop'); }
 
-        document.getElementById('timer').textContent = "STOP";
+        setTimerText("STOP");
         setStatus('ready');
         updateProgressBar(100);
         highlightButton(null); 
@@ -1263,8 +1378,15 @@
     
     function resetDisplay() {
         timerState.roundsCount = 0;
-        updateRoundsDisplay(0);
-        document.getElementById('timer').textContent = "00:00";
+        if (mode === 'tabata') {
+            // Idle Tabata screen should preview its own labels, not the
+            // standard-timer "R0 -" / "- R0" rounds indicator.
+            document.getElementById('rounds-left').textContent = 'SET';
+            document.getElementById('rounds-right').textContent = 'INT';
+        } else {
+            updateRoundsDisplay(0);
+        }
+        setTimerText("00:00");
         document.getElementById('timer').classList.remove('break-text');
         document.getElementById('timer').classList.remove('interval-text');
         setStatus('ready');
@@ -1308,19 +1430,29 @@
     
     function renderStopwatchDisplay(m, s, h) {
         const timerDisplay = document.getElementById('timer');
-        timerDisplay.innerHTML = `
-            <span id="sw-min" class="sw-unit">${pad(m)}</span><span class="sw-sep">:</span><span id="sw-sec" class="sw-unit">${pad(s)}</span><span class="sw-sep">.</span><span id="sw-hun" class="sw-unit">${pad(h)}</span>
-        `;
+        timerDisplay.innerHTML =
+            '<span id="sw-min" class="sw-unit"></span>' +
+            '<span class="sw-sep">:</span>' +
+            '<span id="sw-sec" class="sw-unit"></span>' +
+            '<span class="sw-sep">.</span>' +
+            '<span id="sw-hun" class="sw-unit"></span>';
+        updateStopwatchDigits(m, s, h);
     }
-    
+
     function updateStopwatchDigits(m, s, h) {
-        const elMin = document.getElementById('sw-min');
-        const elSec = document.getElementById('sw-sec');
-        const elHun = document.getElementById('sw-hun');
-        
-        if(elMin) elMin.textContent = pad(m);
-        if(elSec) elSec.textContent = pad(s);
-        if(elHun) elHun.textContent = pad(h);
+        setUnitDigits('sw-min', m);
+        setUnitDigits('sw-sec', s);
+        setUnitDigits('sw-hun', h);
+    }
+
+    // Renders a 2-digit stopwatch unit (min/sec/hundredths) with each
+    // digit in its own fixed-width slot, same reasoning as setTimerText -
+    // .sw-unit's old text-align:right on a plain 2-char string still let a
+    // narrow "1" shrink the block and shift its neighbor digit.
+    function setUnitDigits(id, num) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = pad(num).split('').map(ch => '<span class="timer-digit">' + ch + '</span>').join('');
     }
     
     function pad(num) {
@@ -1384,7 +1516,8 @@
                 else startTabata();
             } else if (mode === "timer") {
                 if (timerRunning) handleTimerStop();
-                else stopTimer(); 
+                // Idle: nothing to stop/pause, so no-op (previously forced
+                // the display to show "STOP" for no reason).
             }
         } 
         else if (key === "escape") {
@@ -1425,6 +1558,14 @@
         document.getElementById('break60').checked = true;
         breakDuration = 60;
     });
+
+    // Run the same setup switching modes triggers (wide-mode class,
+    // rounds display, fixed-width digit rendering, etc.) so the initial
+    // Timer view is identical to what you get after visiting another tab
+    // and coming back, instead of relying on the static HTML to
+    // approximate it - that's what let the clock/rounds row render
+    // uncentered and cramped on first load.
+    switchMode('timer');
 </script>
 </body>
 </html>
